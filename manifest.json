@@ -2,10 +2,10 @@
   "type": "plugin",
   "id": "com.zwjdujin.relationships",
   "name": "人际关系管理",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "apiVersion": "2",
   "settingsUi": "host",
-  "description": "以笔记为中心管理人际网络：一键新建联系人卡片、在面板中浏览与检索所有联系人、记录每次互动。",
+  "description": "以笔记为中心管理人际网络：结构化联系人卡片（性别、婚况、身高、体重、鞋码、手机号、身份证号等，带格式校验）、联系人面板浏览检索、互动记录。",
   "author": "zwjdujin",
   "entry": "./main.js",
   "platforms": ["web", "desktop"],
@@ -25,6 +25,13 @@
         "label": "联系人笔记本",
         "default": "人际关系",
         "description": "新建联系人时优先放入同名笔记本，不存在时自动创建。"
+      },
+      {
+        "key": "additional-fields",
+        "type": "text",
+        "label": "自定义扩展字段",
+        "default": "微信,QQ,住址",
+        "description": "用逗号分隔，将作为额外字段加入联系人卡片与表单（最多20个）。"
       }
     ]
   }
