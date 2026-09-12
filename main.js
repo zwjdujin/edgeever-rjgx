@@ -1,17 +1,27 @@
+const joinTextLines = (value) =>
+  value.split(/\n+/).map((part) => part.trim()).filter(Boolean).join("；");
+
 const FIELD_DEFS = [
   { key: "name", label: "姓名", input: "text", required: true, placeholder: "必填" },
   { key: "gender", label: "性别", input: "select", options: ["男", "女", "其他", "保密"] },
   { key: "married", label: "婚况", input: "select", options: ["未婚", "已婚", "离异", "丧偶", "保密"] },
+  { key: "birthday", label: "生日", input: "date" },
   { key: "height", label: "身高(cm)", input: "text", inputMode: "decimal", inputFilter: /[^0-9.]/g, placeholder: "如 175", validate: numberInRange(0, 300, "身高") },
   { key: "weight", label: "体重(kg)", input: "text", inputMode: "decimal", inputFilter: /[^0-9.]/g, placeholder: "如 65.5", validate: numberInRange(0, 500, "体重") },
   { key: "shoeSize", label: "鞋子尺码", input: "text", inputMode: "decimal", inputFilter: /[^0-9.]/g, placeholder: "如 42.5", validate: numberInRange(0, 100, "鞋子尺码") },
   { key: "phone", label: "手机号", input: "text", inputMode: "numeric", inputFilter: /\D/g, placeholder: "仅可输入数字", aliases: ["电话"], validate: digitsOnly("手机号") },
   { key: "formerPhone", label: "曾用手机号", input: "text", inputMode: "numeric", inputFilter: /\D/g, placeholder: "仅可输入数字", validate: digitsOnly("曾用手机号") },
-  { key: "idCard", label: "身份证号", input: "text", placeholder: "18位，末位可为X", normalize: (value) => value.toUpperCase(), validate: validateIdCard },
   { key: "email", label: "邮箱", input: "text", inputMode: "email", placeholder: "name@example.com", validate: validateEmail },
-  { key: "birthday", label: "生日", input: "date" },
+  { key: "idCard", label: "身份证号", input: "text", placeholder: "18位，末位可为X", normalize: (value) => value.toUpperCase(), validate: validateIdCard },
   { key: "relation", label: "关系", input: "text", placeholder: "朋友 / 同事 / 客户 / 家人 / 其他" },
   { key: "company", label: "公司 / 单位", input: "text" },
+  { key: "workAddress", label: "工作地址", input: "text", placeholder: "单位所在地址" },
+  { key: "education", label: "学历信息", input: "text", placeholder: "如 本科·武汉大学计算机系" },
+  { key: "householdAddress", label: "户籍住址", input: "text", placeholder: "户口所在地" },
+  { key: "livingAddress", label: "居住地址", input: "text", placeholder: "现居地址" },
+  { key: "familyRelations", label: "家庭关系", input: "textarea", wide: true, rows: 2, placeholder: "可换行，保存时自动合并为一行，如：\n父亲：张大山\n配偶：李丽", normalize: joinTextLines },
+  { key: "hobbies", label: "兴趣爱好", input: "textarea", wide: true, rows: 2, placeholder: "可换行，保存时自动合并为一行，如：\n篮球\n摄影", normalize: joinTextLines },
+  { key: "health", label: "身体状况", input: "textarea", wide: true, rows: 2, placeholder: "过敏史、慢性病、运动习惯等，可换行", normalize: joinTextLines },
   { key: "metAt", label: "认识场合", input: "text", aliases: ["认识于"], placeholder: "时间 / 场合" },
 ];
 
@@ -209,6 +219,11 @@ const buildFieldCell = (def, initialValue, wrappers) => {
       if (option === filteredInitial) element.selected = true;
       input.append(element);
     }
+  } else if (def.input === "textarea") {
+    input = document.createElement("textarea");
+    input.rows = def.rows ?? 2;
+    input.value = filteredInitial;
+    if (def.placeholder) input.placeholder = def.placeholder;
   } else {
     input = document.createElement("input");
     input.type = def.input === "date" ? "date" : "text";
@@ -216,7 +231,7 @@ const buildFieldCell = (def, initialValue, wrappers) => {
     if (def.placeholder) input.placeholder = def.placeholder;
   }
   if (def.inputMode) input.setAttribute("inputmode", def.inputMode);
-  input.style.cssText = INPUT_STYLE;
+  input.style.cssText = def.input === "textarea" ? `${INPUT_STYLE} resize:vertical;` : INPUT_STYLE;
 
   const error = document.createElement("div");
   error.style.cssText = ERROR_STYLE;
@@ -230,6 +245,7 @@ const buildFieldCell = (def, initialValue, wrappers) => {
   });
 
   cell.append(label, input, error);
+  if (def.wide) cell.style.gridColumn = "1 / -1";
   wrappers.set(def.key, { def, input, error });
   return cell;
 };
