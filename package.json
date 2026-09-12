@@ -1,0 +1,25 @@
+{
+  "name": "edgeever-social-graph",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "EdgeEver 人际关系图谱插件",
+  "scripts": {
+    "build": "node build.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "esbuild test/smoke.ts --bundle --format=esm --platform=node --target=node20 --outfile=test/.smoke.mjs --log-level=warning && node test/.smoke.mjs",
+    "test:dom": "esbuild test/dom.ts --bundle --format=cjs --platform=node --target=node20 --outfile=test/.dom.cjs --external:jsdom --log-level=error && node test/.dom.cjs",
+    "preview": "esbuild preview/entry.ts --bundle --format=esm --target=es2020 --outfile=preview/preview.js --log-level=warning",
+    "release": "node release.mjs",
+    "package": "npm run release && node tools/package-dist.mjs && node tools/verify-dist.mjs",
+    "verify": "npm run typecheck && npm run test && npm run test:dom && npm run release && npm run preview"
+  },
+  "devDependencies": {
+    "@types/jsdom": "^30.0.0",
+    "@types/node": "^22.20.2",
+    "esbuild": "^0.23.1",
+    "jsdom": "^30.0.1",
+    "jszip": "^3.10.2",
+    "typescript": "^7.0.2"
+  }
+}
