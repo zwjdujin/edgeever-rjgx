@@ -1,0 +1,22 @@
+{
+  "name": "EdgeEver人际关系插件",
+  "version": "1.0.0",
+  "description": "EdgeEver人际关系管理插件",
+  "author": "zwjdujin",
+  "repository": "https://github.com/zwjdujin/edgeever-rjgx",
+  "skills": [
+    {
+      "name": "edgeever-rjgx",
+      "description": "EdgeEver人际关系管理技能",
+      "file": "skills/SKILL.md"
+    }
+  ],
+  "main": "skills/SKILL.md",
+  "license": "MIT",
+  "keywords": ["人际关系", "EdgeEver", "管理"],
+  "categories": ["productivity"],
+  "icon": "https://github.com/zwjdujin/edgeever-rjgx/raw/main/icon.png",
+  "homepage": "https://github.com/zwjdujin/edgeever-rjgx",
+  "bugs": "https://github.com/zwjdujin/edgeever-rjgx/issues",
+  "readme": "https://github.com/zwjdujin/edgeever-rjgx/blob/main/README.md"
+}
