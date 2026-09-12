@@ -1,0 +1,31 @@
+{
+  "type": "plugin",
+  "id": "com.zwjdujin.relationships",
+  "name": "人际关系管理",
+  "version": "1.0.0",
+  "apiVersion": "2",
+  "settingsUi": "host",
+  "description": "以笔记为中心管理人际网络：一键新建联系人卡片、在面板中浏览与检索所有联系人、记录每次互动。",
+  "author": "zwjdujin",
+  "entry": "./main.js",
+  "platforms": ["web", "desktop"],
+  "permissions": ["notes:read", "notes:write", "ui:commands", "ui:notices", "ui:panels", "ui:navigation"],
+  "settings": {
+    "fields": [
+      {
+        "key": "contact-tag",
+        "type": "text",
+        "label": "联系人标签",
+        "default": "人际",
+        "description": "带有此标签的笔记会被视作联系人卡片。"
+      },
+      {
+        "key": "notebook-name",
+        "type": "text",
+        "label": "联系人笔记本",
+        "default": "人际关系",
+        "description": "新建联系人时优先放入同名笔记本，不存在时自动创建。"
+      }
+    ]
+  }
+}
