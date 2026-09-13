@@ -2,7 +2,7 @@
   "type": "plugin",
   "id": "com.zwjdujin.relationships",
   "name": "人际关系管理",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "apiVersion": "2",
   "settingsUi": "host",
   "description": "以笔记为中心管理人际网络：结构化联系人卡片（性别、婚况、身高体重、鞋码、手机号、身份证号、四级地址级联选择、学历、爱好、家庭关系、身体状况等，带格式校验）、联系人面板浏览检索、互动记录。",

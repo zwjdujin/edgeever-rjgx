@@ -16,11 +16,11 @@ const FIELD_DEFS = [
   { key: "relation", label: "关系", input: "text", placeholder: "朋友 / 同事 / 客户 / 家人 / 其他" },
   { key: "company", label: "公司 / 单位", input: "text" },
   { key: "workAddress", label: "工作地址", input: "address", wide: true },
-  { key: "education", label: "学历信息", input: "text", placeholder: "如 本科·武汉大学计算机系" },
+  { key: "education", label: "学历信息", input: "education", wide: true },
   { key: "householdAddress", label: "户籍住址", input: "address", wide: true },
   { key: "livingAddress", label: "居住地址", input: "address", wide: true },
   { key: "familyRelations", label: "家庭关系", input: "textarea", wide: true, rows: 2, placeholder: "可换行，保存时自动合并为一行，如：\n父亲：张大山\n配偶：李丽", normalize: joinTextLines },
-  { key: "hobbies", label: "兴趣爱好", input: "textarea", wide: true, rows: 2, placeholder: "可换行，保存时自动合并为一行，如：\n篮球\n摄影", normalize: joinTextLines },
+  { key: "hobbies", label: "兴趣爱好", input: "hobbies", wide: true, rows: 2, placeholder: "可换行或用分号分隔，保存时自动合并为一行，如：\n篮球\n摄影", normalize: joinTextLines },
   { key: "health", label: "身体状况", input: "textarea", wide: true, rows: 2, placeholder: "过敏史、慢性病、运动习惯等，可换行", normalize: joinTextLines },
   { key: "metAt", label: "认识场合", input: "text", aliases: ["认识于"], placeholder: "时间 / 场合" },
 ];
@@ -88,6 +88,30 @@ const listContacts = async (context, contactTag, keyword) => {
   if (keyword && keyword.trim()) request.text = keyword.trim();
   const result = await context.notes.query(request);
   return result.notes ?? [];
+};
+
+// 从所有联系人笔记的「兴趣爱好」行聚合出可点选标签（去重，最多30个）
+const HOBBY_SPLIT = /[；;、,，\n]+/;
+const collectHobbySuggestions = async (context, contactTag) => {
+  try {
+    const result = await context.notes.queryContent({ tags: [contactTag], sort: "updated-desc", limit: 200 });
+    const seen = new Set();
+    const hobbies = [];
+    for (const note of result.notes ?? []) {
+      const match = String(note.contentMarkdown ?? "").match(/^- 兴趣爱好：(.*)$/m);
+      if (!match) continue;
+      for (const term of match[1].split(HOBBY_SPLIT)) {
+        const hobby = term.trim();
+        if (!hobby || hobby.length > 12 || seen.has(hobby)) continue;
+        seen.add(hobby);
+        hobbies.push(hobby);
+        if (hobbies.length >= 30) return hobbies;
+      }
+    }
+    return hobbies;
+  } catch {
+    return [];
+  }
 };
 
 const findFieldLineIndex = (lines, def) => {
@@ -506,8 +530,197 @@ const buildAddressCell = (def, initialValue, wrappers) => {
   return cell;
 };
 
-const buildFieldCell = (def, initialValue, wrappers) => {
+// ==== 学历信息（多级教育经历，前端按学历从高到低排序） ====
+
+const EDUCATION_LEVELS = [
+  { name: "博士", rank: 70 },
+  { name: "硕士", rank: 60 },
+  { name: "本科", rank: 50 },
+  { name: "大专", rank: 40 },
+  { name: "高中", rank: 30 },
+  { name: "初中", rank: 20 },
+  { name: "小学", rank: 10 },
+  { name: "幼儿园", rank: 0 },
+];
+const EDUCATION_RANKS = new Map(EDUCATION_LEVELS.map((level) => [level.name, level.rank]));
+EDUCATION_RANKS.set("大学", EDUCATION_RANKS.get("本科"));
+EDUCATION_RANKS.set("中专", EDUCATION_RANKS.get("高中"));
+// 级别词后必须跟分隔符（或行尾）才算级别，避免"小学教育实验学校"被误判
+const EDUCATION_PREFIX = /^(博士|硕士|本科|大学|大专|高中|中专|初中|小学|幼儿园)(?=[·・:：\-—，,、\s]|$)/;
+
+const parseEducationText = (text) =>
+  String(text ?? "")
+    .split(/[；;]/)
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .map((entry) => {
+      const match = entry.match(EDUCATION_PREFIX);
+      if (!match) return { level: "", detail: entry };
+      return { level: match[1], detail: entry.slice(match[0].length).replace(/^[·・:：\-—，,、\s]+/, "").trim() };
+    });
+
+const educationRank = (level) => EDUCATION_RANKS.get(level) ?? -1;
+
+const sortEducationEntries = (entries) =>
+  [...entries].sort((left, right) => educationRank(right.level) - educationRank(left.level));
+
+const serializeEducationEntries = (entries) =>
+  entries
+    .map((entry) => (entry.level ? (entry.detail ? `${entry.level}·${entry.detail}` : entry.level) : entry.detail))
+    .filter(Boolean)
+    .join("；");
+
+const buildEducationCell = (def, initialValue, wrappers) => {
+  const cell = document.createElement("div");
+  cell.style.gridColumn = "1 / -1";
+
+  const labelRow = document.createElement("div");
+  labelRow.style.cssText = "display:flex; align-items:baseline; gap:8px;";
+  const label = document.createElement("label");
+  label.textContent = def.label;
+  label.style.cssText = "font-size:13px; font-weight:600; opacity:.85;";
+  const hint = document.createElement("span");
+  hint.textContent = "可记录幼儿园到博士的多段经历，按学历从高到低自动排序";
+  hint.style.cssText = "font-size:12px; opacity:.55;";
+  labelRow.append(label, hint);
+
+  const entries = sortEducationEntries(parseEducationText(String(initialValue ?? "")));
+  const listHost = document.createElement("div");
+  listHost.style.cssText = "display:flex; flex-direction:column; gap:6px; margin-top:4px;";
+
+  const render = () => {
+    listHost.replaceChildren();
+    if (entries.length === 0) {
+      const empty = document.createElement("div");
+      empty.textContent = "暂无学历记录，点击下方「添加学历」。";
+      empty.style.cssText = "font-size:13px; opacity:.6;";
+      listHost.append(empty);
+    }
+    for (const entry of entries) {
+      const row = document.createElement("div");
+      row.style.cssText = "display:flex; gap:6px; align-items:center;";
+
+      const levelSelect = document.createElement("select");
+      levelSelect.style.cssText = "flex:0 0 96px; padding:6px 8px; border:1px solid rgba(148,163,184,.6); border-radius:8px; font:inherit; background:transparent; color:inherit;";
+      for (const option of ["", ...EDUCATION_LEVELS.map((level) => level.name)]) {
+        const element = document.createElement("option");
+        element.value = option;
+        element.textContent = option || "（级别）";
+        if (option === entry.level) element.selected = true;
+        levelSelect.append(element);
+      }
+      levelSelect.addEventListener("change", () => { entry.level = levelSelect.value; });
+
+      const detailInput = document.createElement("input");
+      detailInput.type = "text";
+      detailInput.value = entry.detail;
+      detailInput.placeholder = "学校 / 专业 / 起止年份";
+      detailInput.style.cssText = "flex:1; min-width:0; padding:6px 10px; border:1px solid rgba(148,163,184,.6); border-radius:8px; font:inherit; background:transparent; color:inherit;";
+      detailInput.addEventListener("input", () => { entry.detail = detailInput.value; });
+
+      const removeButton = document.createElement("button");
+      removeButton.type = "button";
+      removeButton.textContent = "删除";
+      removeButton.style.cssText = "flex:0 0 auto; padding:5px 12px; border:1px solid rgba(220,38,38,.45); border-radius:8px; background:transparent; color:#dc2626; cursor:pointer; font:inherit; font-size:13px;";
+      removeButton.addEventListener("click", () => {
+        entries.splice(entries.indexOf(entry), 1);
+        render();
+      });
+
+      row.append(levelSelect, detailInput, removeButton);
+      listHost.append(row);
+    }
+
+    const addButton = document.createElement("button");
+    addButton.type = "button";
+    addButton.textContent = "+ 添加学历";
+    addButton.style.cssText = "align-self:flex-start; padding:5px 14px; border:1px dashed rgba(148,163,184,.8); border-radius:8px; background:transparent; color:inherit; cursor:pointer; font:inherit; font-size:13px;";
+    addButton.addEventListener("click", () => {
+      entries.push({ level: "", detail: "" });
+      render();
+      const inputs = listHost.querySelectorAll("input");
+      inputs[inputs.length - 1]?.focus();
+    });
+    listHost.append(addButton);
+  };
+  render();
+
+  cell.append(labelRow, listHost);
+  wrappers.set(def.key, {
+    def,
+    getValue: () => serializeEducationEntries(sortEducationEntries(entries)),
+    input: null,
+    error: null,
+  });
+  return cell;
+};
+
+// ==== 兴趣爱好（下方展示其他联系人用过的爱好标签，点击填入/移除） ====
+
+const buildHobbiesCell = (def, initialValue, suggestions, wrappers) => {
+  const cell = document.createElement("div");
+  cell.style.gridColumn = "1 / -1";
+
+  const label = document.createElement("label");
+  label.textContent = def.label;
+  label.style.cssText = "display:block; font-size:13px; font-weight:600; margin-bottom:4px; opacity:.85;";
+
+  const textarea = document.createElement("textarea");
+  textarea.rows = def.rows ?? 2;
+  textarea.value = String(initialValue ?? "");
+  if (def.placeholder) textarea.placeholder = def.placeholder;
+  textarea.style.cssText = `${INPUT_STYLE} resize:vertical;`;
+
+  const chipsHost = document.createElement("div");
+  chipsHost.style.cssText = "display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; align-items:center;";
+
+  const currentTerms = () =>
+    textarea.value.split(HOBBY_SPLIT).map((term) => term.trim()).filter(Boolean);
+
+  const renderChips = () => {
+    chipsHost.replaceChildren();
+    if (!suggestions.length) {
+      const empty = document.createElement("span");
+      empty.textContent = "先为其他联系人记录兴趣爱好后，这里会出现可点击的标签。";
+      empty.style.cssText = "font-size:12px; opacity:.55;";
+      chipsHost.append(empty);
+      return;
+    }
+    const caption = document.createElement("span");
+    caption.textContent = "点击填入：";
+    caption.style.cssText = "font-size:12px; opacity:.55;";
+    chipsHost.append(caption);
+    const current = currentTerms();
+    for (const term of suggestions) {
+      const included = current.includes(term);
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.textContent = term;
+      chip.style.cssText = included
+        ? "padding:3px 12px; border:none; border-radius:999px; background:#16a06e; color:#ffffff; cursor:pointer; font:inherit; font-size:13px;"
+        : "padding:3px 12px; border:1px solid rgba(148,163,184,.6); border-radius:999px; background:transparent; color:inherit; cursor:pointer; font:inherit; font-size:13px;";
+      chip.addEventListener("click", () => {
+        const parts = currentTerms();
+        textarea.value = parts.includes(term)
+          ? parts.filter((part) => part !== term).join("；")
+          : [...parts, term].join("；");
+        renderChips();
+      });
+      chipsHost.append(chip);
+    }
+  };
+  textarea.addEventListener("input", renderChips);
+  renderChips();
+
+  cell.append(label, textarea, chipsHost);
+  wrappers.set(def.key, { def, input: textarea, error: null });
+  return cell;
+};
+
+const buildFieldCell = (def, initialValue, wrappers, extras = {}) => {
   if (def.input === "address") return buildAddressCell(def, initialValue, wrappers);
+  if (def.input === "education") return buildEducationCell(def, initialValue, wrappers);
+  if (def.input === "hobbies") return buildHobbiesCell(def, initialValue, extras.hobbySuggestions ?? [], wrappers);
   const cell = document.createElement("div");
   const label = document.createElement("label");
   label.textContent = def.label + (def.required ? " *" : "");
@@ -587,7 +800,7 @@ const validateFormValues = (wrappers, values) => {
 };
 
 const buildContactForm = (context, options) => {
-  const { mode, note, extraLabels, contactTag, notebookName, onCancel, onSaved } = options;
+  const { mode, note, extraLabels, contactTag, notebookName, hobbySuggestions, onCancel, onSaved } = options;
   const initial = mode === "edit" && note
     ? { ...parseNoteValues(note.contentMarkdown ?? "", extraLabels), name: note.title ?? "" }
     : {};
@@ -606,8 +819,9 @@ const buildContactForm = (context, options) => {
   form.append(grid);
 
   const wrappers = new Map();
+  const formExtras = { hobbySuggestions };
   for (const def of FIELD_DEFS) {
-    grid.append(buildFieldCell(def, initial[def.key] ?? "", wrappers));
+    grid.append(buildFieldCell(def, initial[def.key] ?? "", wrappers, formExtras));
   }
   for (const label of extraLabels) {
     grid.append(buildFieldCell({ key: `x_${label}`, label, input: "text" }, initial[`x_${label}`] ?? "", wrappers));
@@ -722,6 +936,9 @@ const renderRelationshipsPanel = async (context, container, shell, options) => {
     formMode: options?.startInCreateMode ? { mode: "create" } : null,
   };
 
+  // 爱好标签缓存：undefined 表示未收集；表单打开时收集，保存后失效
+  let hobbySuggestions;
+
   const listHost = document.createElement("div");
   listHost.style.cssText = "display: flex; flex-direction: column;";
   container.append(listHost);
@@ -759,6 +976,9 @@ const renderRelationshipsPanel = async (context, container, shell, options) => {
   const render = async () => {
     listHost.replaceChildren();
     if (state.formMode) {
+      if (hobbySuggestions === undefined) {
+        hobbySuggestions = await collectHobbySuggestions(context, contactTag);
+      }
       applyChrome(state.formMode.mode, 0);
       listHost.append(buildContactForm(context, {
         mode: state.formMode.mode,
@@ -766,11 +986,13 @@ const renderRelationshipsPanel = async (context, container, shell, options) => {
         extraLabels,
         contactTag,
         notebookName,
+        hobbySuggestions,
         onCancel() {
           state.formMode = null;
           render();
         },
         async onSaved(created) {
+          hobbySuggestions = undefined;
           state.formMode = null;
           await render();
           if (created?.id) await context.ui.openNote(created.id);
